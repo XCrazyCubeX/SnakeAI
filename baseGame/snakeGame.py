@@ -124,6 +124,7 @@ def main():
                 hit_wall = not (0 <= nxt[0] < GRID_W and 0 <= nxt[1] < GRID_H)
                 hit_self = (nxt in snake)
                 if (hit_wall and not WRAP) or hit_self:
+
                     alive = False
                 else:
                     snake.insert(0, nxt)
