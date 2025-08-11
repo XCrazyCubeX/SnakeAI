@@ -13,11 +13,9 @@ pygame.init()
 pygame.display.set_caption('Flappy Bird')
 
 
-
 ####################
 # Global Variables
 ####################
-
 
 
 # --- Config ---
@@ -70,7 +68,7 @@ class Snake(gym.Env):
 
         # Observation space
         self.observation_space = spaces.Box(low=0, high=255,
-                                            shape=(5,), dtype=np.int32)
+                                            shape=(0,), dtype=np.int32)
 
 
 

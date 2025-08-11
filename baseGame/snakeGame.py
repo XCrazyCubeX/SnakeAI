@@ -11,10 +11,9 @@ import pygame
 
 # --- Config ---
 CELL_SIZE   = 24
-GRID_W      = 28
-GRID_H      = 22
-FPS         = 60
-STEP_EVERY  = 110  # ms between snake steps (lower = faster)
+GRID_W      = 10
+GRID_H      = 10
+FPS         = 6 # new speed change
 WRAP        = False  # True = go through walls, False = die on walls
 
 # Colors
@@ -51,7 +50,7 @@ def main():
     pygame.init()
     clock = pygame.time.Clock()
     screen = pygame.display.set_mode((GRID_W * CELL_SIZE, GRID_H * CELL_SIZE))
-    pygame.display.set_caption("🐍 Snake — pygame")
+    pygame.display.set_caption("Snake")
     try:
         font = pygame.font.SysFont("consolas,menlo,monospace", 22)
         big  = pygame.font.SysFont("consolas,menlo,monospace", 36, bold=True)
@@ -69,12 +68,10 @@ def main():
         direction = RIGHT
         food = rand_free_cell(set(snake))
         score = 0
-        step_timer = 0
-        paused = False
         alive = True
-        return snake, direction, food, score, step_timer, paused, alive
+        return snake, direction, food, score, alive
 
-    snake, direction, food, score, step_timer, paused, alive = reset()
+    snake, direction, food, score, alive = reset()
     pending_dir = direction
 
     running = True
@@ -85,15 +82,8 @@ def main():
                 running = False
 
             elif event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_ESCAPE, pygame.K_q):
-                    running = False
-                elif event.key in (pygame.K_p, pygame.K_SPACE):
-                    if alive:
-                        paused = not paused
-                elif event.key == pygame.K_r:
-                    snake, direction, food, score, step_timer, paused, alive = reset()
-                    pending_dir = direction
-                elif event.key in (pygame.K_UP, pygame.K_w):
+
+                if event.key in (pygame.K_UP, pygame.K_w):
                     if direction != opposite[UP]:
                         pending_dir = UP
                 elif event.key in (pygame.K_DOWN, pygame.K_s):
@@ -107,32 +97,30 @@ def main():
                         pending_dir = RIGHT
 
         # Update
-        if alive and not paused:
-            step_timer += dt
-            if step_timer >= STEP_EVERY:
-                step_timer = 0
-                # commit direction once per step (prevents double-turn bugs)
-                if pending_dir != opposite[direction]:
-                    direction = pending_dir
+        if alive:
 
-                head = snake[0]
-                nxt = add_pos(head, direction)
-                if WRAP:
-                    nxt = wrap_pos(nxt)
+            # commit direction once per step (prevents double-turn bugs)
+            if pending_dir != opposite[direction]:
+                direction = pending_dir
 
-                # collisions
-                hit_wall = not (0 <= nxt[0] < GRID_W and 0 <= nxt[1] < GRID_H)
-                hit_self = (nxt in snake)
-                if (hit_wall and not WRAP) or hit_self:
+            head = snake[0]
+            nxt = add_pos(head, direction)
+            if WRAP:
+                nxt = wrap_pos(nxt)
 
-                    alive = False
+            # collisions
+            hit_wall = not (0 <= nxt[0] < GRID_W and 0 <= nxt[1] < GRID_H)
+            hit_self = (nxt in snake)
+            if (hit_wall and not WRAP) or hit_self:
+                snake, direction, food, score, alive = reset()
+                pending_dir = direction
+            else:
+                snake.insert(0, nxt)
+                if nxt == food:
+                    score += 1
+                    food = rand_free_cell(set(snake))
                 else:
-                    snake.insert(0, nxt)
-                    if nxt == food:
-                        score += 1
-                        food = rand_free_cell(set(snake))
-                    else:
-                        snake.pop()
+                    snake.pop()
 
         # Draw
         screen.fill(BG)
@@ -157,18 +145,12 @@ def main():
                 pygame.draw.rect(screen, (color[0]//2, color[1]//2, color[2]//2), inset, border_radius=4)
 
         # HUD
-        hud = font.render(f"Score: {score}   Speed: {round(1000/STEP_EVERY,1)} steps/s   P=pause  R=restart  Esc=quit", True, TEXT)
+        hud = font.render(f"Score: {score}", True, TEXT)
         screen.blit(hud, (10, 8))
 
-        if paused and alive:
-            t = big.render("Paused", True, ACCENT)
-            screen.blit(t, t.get_rect(center=screen.get_rect().center))
 
-        if not alive:
-            over  = big.render("Game Over", True, TEXT)
-            tip   = font.render("Press R to restart or Esc to quit", True, TEXT)
-            screen.blit(over, over.get_rect(center=(screen.get_width()//2, screen.get_height()//2 - 20)))
-            screen.blit(tip,  tip.get_rect(center=(screen.get_width()//2, screen.get_height()//2 + 18)))
+
+
 
         pygame.display.flip()
 
