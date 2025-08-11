@@ -4,6 +4,11 @@ import sys
 import random
 import pygame
 
+
+
+
+
+
 # --- Config ---
 CELL_SIZE   = 24
 GRID_W      = 28

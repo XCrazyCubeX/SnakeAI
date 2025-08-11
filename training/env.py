@@ -4,11 +4,7 @@ import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
 import pygame
-import random
-import time
-from collections import deque
-import os
-os.environ['SDL_AUDIODRIVER'] = 'dummy'
+
 
 # Initialize Pygame
 pygame.init()

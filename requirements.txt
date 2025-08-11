@@ -1,7 +1,7 @@
 torch
 torchvision
 
-stablebaselines3
+stable-baselines3
 gymnasium
 numpy
 pygame
