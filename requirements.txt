@@ -1,0 +1,8 @@
+torch
+torchvision
+
+stablebaselines3
+gymnasium
+numpy
+pygame
+
