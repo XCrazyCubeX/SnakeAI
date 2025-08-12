@@ -19,10 +19,10 @@ pygame.display.set_caption('Flappy Bird')
 
 # --- Config ---
 CELL_SIZE   = 24
-GRID_W      = 28
-GRID_H      = 22
+GRID_W      = 10
+GRID_H      = 10
 FPS         = 60
-STEP_EVERY  = 110  # ms between snake steps (lower = faster)
+STEP_EVERY  = 200  # ms between snake steps (lower = faster)
 WRAP        = False  # True = go through walls, False = die on walls
 
 # Colors
@@ -221,10 +221,14 @@ class Snake(gym.Env):
 
 if __name__ == "__main__":
     try:
-        env = Snake()
         print("✅ Snake environment loaded successfully!")
+
+        env = Snake()
+        while True:
+            env.render()
+
     except Exception as e:
         print("❌ Failed to load Snake environment!")
-        print("Error:", e)      
+        print("Error:", e)
 
 
