@@ -5,25 +5,21 @@ import random
 import pygame
 
 
-
-
-
-
 # --- Config ---
-CELL_SIZE   = 24
-GRID_W      = 10
-GRID_H      = 10
-FPS         = 6 # new speed change
-WRAP        = False  # True = go through walls, False = die on walls
+CELL_SIZE   =24
+GRID_W      =10
+GRID_H      =10
+FPS         =6 # new speed change
+WRAP        =False  # True = go through walls, False = die on walls
 
 # Colors
-BG          = (18, 18, 22)
-GRID        = (28, 28, 34)
-SNAKE_HEAD  = (80, 200, 255)
-SNAKE_BODY  = (50, 160, 210)
-FOOD        = (255, 110, 120)
-TEXT        = (230, 230, 235)
-ACCENT      = (120, 200, 130)
+BG          =(18, 18, 22)
+GRID        =(28, 28, 34)
+SNAKE_HEAD  =(80, 200, 255)
+SNAKE_BODY  =(50, 160, 210)
+FOOD        =(255, 110, 120)
+TEXT        =(230, 230, 235)
+ACCENT      =(120, 200, 130)
 
 # Avoid ALSA spam on some Linux boxes
 os.environ.setdefault("SDL_AUDIODRIVER", "dummy")

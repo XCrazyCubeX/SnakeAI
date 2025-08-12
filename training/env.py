@@ -66,7 +66,7 @@ class Snake(gym.Env):
 
     def __init__(self, grid_w=GRID_W, grid_h=GRID_H, wrap=False):
         """
-        # Initialize flappy bird game, make sure all self values exist
+        # Initialize snake game, make sure all self values exist
         # Here we also define our observation space and action space
         """
         super(Snake, self).__init__()
@@ -84,7 +84,7 @@ class Snake(gym.Env):
 
         # internal state, snake food, score...
 
-        self.snake = None           # list of (x,y), head = snake[0]
+        self.snake = None           # list of (x,y), head = snake[0] body = snake[1][2][3][4].....
         self.direction = 1          # start right
         self.food = None
         self.score = 0
