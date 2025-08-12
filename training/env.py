@@ -125,7 +125,6 @@ class Snake(gym.Env):
         :param action:
         :return: obs, reward, terminated, truncated, info
         """
-        ...
 
 
 
@@ -141,8 +140,27 @@ class Snake(gym.Env):
         :return: return self._get_observation(), self.info
 
         """
-        ...
+        super().reset(seed=seed)  # If you want Gym's seeding logic
 
+        # Starting snake position
+        start_x = self.W // 2
+        start_y = self.H // 2
+        self.snake = [(start_x, start_y)]  # head only at start
+
+        # Starting food position
+        self.food = (np.random.randint(0, self.W), np.random.randint(0, self.H))
+
+        self.direction = 1  # start moving right
+        self.score = 0
+        self._rng = np.random.default_rng()
+        self._last_obs = None
+
+        # For rendering
+        self._screen = None
+        self._surface = None
+        self._pygame_inited = False
+
+        return None, {}  # Gymnasium requires (obs, info)
 
 
     # Render in game objects
@@ -235,6 +253,7 @@ if __name__ == "__main__":
                     running = False
 
             env.render()
+            
 
         pygame.quit()
 
