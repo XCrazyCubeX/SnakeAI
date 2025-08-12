@@ -10,7 +10,7 @@ import pygame
 
 
 # --- Config ---
-CELL_SIZE   = 24
+CELL_SIZE   = 40
 GRID_W      = 10
 GRID_H      = 10
 FPS         = 6 # new speed change
