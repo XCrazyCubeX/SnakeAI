@@ -58,9 +58,6 @@ class Snake(gym.Env):
     """
     metadata = {'render.modes': ['human']}
 
-    # actions: 0=Up, 1=Right, 2=Down, 3=Left
-    _DIRS = np.array([(0, -1), (1, 0), (0, 1), (-1, 0)])
-    _OPPOSITE = {0: 2, 2: 0, 1: 3, 3: 1}
 
 
 
@@ -98,6 +95,9 @@ class Snake(gym.Env):
         self._pygame_inited = False
 
 
+        self._last_step_ms = 0
+        self._pending_dir = 1
+
 
 
     # Get observation
@@ -126,6 +126,47 @@ class Snake(gym.Env):
         :return: obs, reward, terminated, truncated, info
         """
 
+        self.render()
+        obs  = self._get_observation()
+        reward, terminated, truncated = self._get_rewards()
+        info = {}
+
+        # actions: 0=Up, 1=Right, 2=Down, 3=Left
+        _DIRS = np.array([(0, -1), (1, 0), (0, 1), (-1, 0)])
+        _OPPOSITE = {0: 2, 2: 0, 1: 3, 3: 1}
+
+        if event.type == pygame.KEYDOWN:
+
+            if event.key in (pygame.K_UP, pygame.K_w):
+                if self.direction != _OPPOSITE[0]:
+                    _DIRS = 0
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                if self.direction != _OPPOSITE[2]:
+                    _DIRS = 2
+            elif event.key in (pygame.K_LEFT, pygame.K_a):
+                if self.direction != _OPPOSITE[3]:
+                    _DIRS = 3
+            elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                if self.direction != _OPPOSITE[1]:
+                    _DIRS = 1
+
+        pygame.event.pump()
+
+        if action == 0:
+            if self.direction != _OPPOSITE[0]:
+                _DIRS = 0
+        if action == 1:
+            if self.direction != _OPPOSITE[2]:
+                _DIRS = 2
+        if action == 2:
+            if self.direction != _OPPOSITE[3]:
+                _DIRS = 3
+        if action == 3:
+            if self.direction != _OPPOSITE[1]:
+                _DIRS = 1
+
+
+        return obs, reward, terminated, truncated, info
 
 
     # Reset function
@@ -159,7 +200,8 @@ class Snake(gym.Env):
         self._surface = None
         self._pygame_inited = False
 
-        return None, {}  # Gymnasium requires (self.obs, self.info)
+        self.info = {}
+        return self.info, self._get_observation()
 
 
 
@@ -223,9 +265,10 @@ class Snake(gym.Env):
         self._screen.blit(self._surface, (0, 0))
         pygame.display.flip()
 
-        # Optional: slow down for human view
-        if mode == "human":
-            pygame.time.wait(int(1000 / FPS))
+
+
+    def _move_one_cell(self):
+        ...
 
 
 
@@ -240,14 +283,13 @@ class Snake(gym.Env):
         #
         # :return: reward, terminated, truncated
         """
-        # reward = 0
-        # terminated = False
-        # truncated = False
-        # ...
-        # ...
-        # ...
-        # return reward, terminated, truncated
-        ...
+        reward = 0
+        terminated = False
+        truncated = False
+
+
+        return reward, terminated, truncated
+
 
 
 # Extended code - Windows Hotfix
@@ -264,7 +306,7 @@ if __name__ == "__main__":
                 if event.type == pygame.QUIT:
                     running = False
 
-            env.render()
+            env.step(0)
             
 
         pygame.quit()
