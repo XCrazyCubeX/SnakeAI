@@ -94,7 +94,6 @@ class Snake(gym.Env):
         self._surface = None
         self._pygame_inited = False
 
-
         self._last_step_ms = 0
         self._pending_dir = 1
 
@@ -110,7 +109,7 @@ class Snake(gym.Env):
         """
 
         # obs = np.array([])
-        ...
+        return None
 
 
 
@@ -120,58 +119,46 @@ class Snake(gym.Env):
     # Frame by frame
 
     def step(self, action):
-        """
-        every frame of the game/every action taken
-        :param action:
-        :return: obs, reward, terminated, truncated, info
-        """
+        # accept user input, block 180° turns
+        if action is not None and action in (0, 1, 2, 3) and action != self._OPPOSITE[self.direction]:
+            self._pending_dir = action
 
+        # move at fixed interval
+        now = pygame.time.get_ticks()
+        if now - self._last_step_ms >= STEP_EVERY:
+            self._last_step_ms = now
+            self.direction = self._pending_dir
+
+            dx, dy = self._DIRS[self.direction]
+            hx, hy = self.snake[0]
+            nx, ny = hx + dx, hy + dy
+
+            if self.wrap:
+                nx %= self.W;
+                ny %= self.H
+            else:
+                # quick restart on wall
+                if nx < 0 or nx >= self.W or ny < 0 or ny >= self.H:
+                    return self.reset()
+
+            # quick restart on self-hit
+            if (nx, ny) in self.snake:
+                return self.reset()
+
+            # fixed length: push head, pop tail
+            self.snake.insert(0, (nx, ny))
+            self.snake.pop()
+
+        # always render
         self.render()
-        obs  = self._get_observation()
-        reward, terminated, truncated = self._get_rewards()
-        info = {}
-
-        # actions: 0=Up, 1=Right, 2=Down, 3=Left
-        _DIRS = np.array([(0, -1), (1, 0), (0, 1), (-1, 0)])
-        _OPPOSITE = {0: 2, 2: 0, 1: 3, 3: 1}
-
-        if event.type == pygame.KEYDOWN:
-
-            if event.key in (pygame.K_UP, pygame.K_w):
-                if self.direction != _OPPOSITE[0]:
-                    _DIRS = 0
-            elif event.key in (pygame.K_DOWN, pygame.K_s):
-                if self.direction != _OPPOSITE[2]:
-                    _DIRS = 2
-            elif event.key in (pygame.K_LEFT, pygame.K_a):
-                if self.direction != _OPPOSITE[3]:
-                    _DIRS = 3
-            elif event.key in (pygame.K_RIGHT, pygame.K_d):
-                if self.direction != _OPPOSITE[1]:
-                    _DIRS = 1
-
-        pygame.event.pump()
-
-        if action == 0:
-            if self.direction != _OPPOSITE[0]:
-                _DIRS = 0
-        if action == 1:
-            if self.direction != _OPPOSITE[2]:
-                _DIRS = 2
-        if action == 2:
-            if self.direction != _OPPOSITE[3]:
-                _DIRS = 3
-        if action == 3:
-            if self.direction != _OPPOSITE[1]:
-                _DIRS = 1
-
-
-        return obs, reward, terminated, truncated, info
-
+        return None, 0, False, False, {}
 
     # Reset function
     # Makes sure the game starts with all observations
-    # Resets everything
+# Resets everything
+    # actions: 0=Up, 1=Right, 2=Down, 3=Left
+    _DIRS = np.array([(0, -1), (1, 0), (0, 1), (-1, 0)])
+    _OPPOSITE = {0: 2, 2: 0, 1: 3, 3: 1}
 
     def reset(self, seed=None, options=None):
         """
@@ -179,26 +166,17 @@ class Snake(gym.Env):
         :param options:
         :return: return self._get_observation(), self.info
         """
-
+        super().reset(seed=seed)
         # Starting snake position
         start_x = self.W // 2
         start_y = self.H // 2
+
         self.snake = [(start_x, start_y), (start_x-1, start_y), (start_x-2, start_y)] # [head] [tail1] [tail2]
-
-        # head only at start
-        # Starting food position
-
         self.food = (np.random.randint(0, self.W), np.random.randint(0, self.H))
-
         self.direction = 1  # start moving right
-        self.score = 0
-        self._rng = np.random.default_rng()
-        self._last_obs = None
 
-        # For rendering
-        self._screen = None
-        self._surface = None
-        self._pygame_inited = False
+        self.score = 0
+        self._last_step_ms = pygame.time.get_ticks()
 
         self.info = {}
         return self.info, self._get_observation()
@@ -268,7 +246,14 @@ class Snake(gym.Env):
 
 
     def _move_one_cell(self):
-        ...
+
+        dx, dy = self._DIRS[self.direction]
+        x, y = self.snake[0]
+        nx, ny = x + dx, y + dy
+        if self.wrap:
+            nx %= self.W
+            ny %= self.H
+        return nx, ny
 
 
 
@@ -297,22 +282,39 @@ if __name__ == "__main__":
     try:
         print("✅ Snake environment loaded successfully!")
 
-        env = Snake()
-        env.reset()  # initialize snake & food
+        pygame.display.set_caption("Snake")
+        env = Snake(wrap=WRAP)
+        env.reset()  # initialize snake & (optional) food
 
         running = True
+        current_action = 1  # start moving right
+        clock = pygame.time.Clock()
+
         while running:
+            action_this_frame = None
+
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                elif event.type == pygame.KEYDOWN:
+                    if event.key in (pygame.K_UP, pygame.K_w):      action_this_frame = 0
+                    elif event.key in (pygame.K_RIGHT, pygame.K_d): action_this_frame = 1
+                    elif event.key in (pygame.K_DOWN, pygame.K_s):  action_this_frame = 2
+                    elif event.key in (pygame.K_LEFT, pygame.K_a):  action_this_frame = 3
+                    elif event.key == pygame.K_ESCAPE:              running = False
 
-            env.step(0)
-            
+            # update desired action if a key was pressed
+            if action_this_frame is not None:
+                current_action = action_this_frame
+
+            # step once; your env throttles moves using STEP_EVERY
+            env.step(current_action)
+
+            # avoid burning CPU; visual FPS cap only
+            clock.tick(FPS)
 
         pygame.quit()
 
     except Exception as e:
         print("❌ Failed to load Snake environment!")
         print("Error:", e)
-
-
