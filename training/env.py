@@ -80,7 +80,7 @@ class Snake(gym.Env):
         self.action_space = spaces.Discrete(4)  # up, right, down, left
         # Observation space
         self.observation_space = spaces.Box(low=0, high=255,
-                                            shape=(0,), dtype=np.int8)
+                                            shape=(0,), dtype=np.uint8) # Use of uint8 instead of int8.
 
         # internal state, snake food, score...
 
@@ -147,13 +147,56 @@ class Snake(gym.Env):
 
     # Render in game objects
     # User interface User experience
-
+    
     def render(self, mode='human'):
-        """
-        actually just renders everything, nothing special
+        
+        # Initialize pygame screen only once
+        if not self._pygame_inited:
+            pygame.init()
+            self._screen = pygame.display.set_mode((self.W * CELL_SIZE, self.H * CELL_SIZE))
+            self._surface = pygame.Surface(self._screen.get_size())
+            pygame.display.set_caption("Snake Game")
+            self._pygame_inited = True
 
-        """
-        ...
+        # Fill background
+        self._surface.fill(BG)
+
+        # Draw grid lines
+        for x in range(0, self.W * CELL_SIZE, CELL_SIZE):
+            pygame.draw.line(self._surface, GRID, (x, 0), (x, self.H * CELL_SIZE))
+        for y in range(0, self.H * CELL_SIZE, CELL_SIZE):
+            pygame.draw.line(self._surface, GRID, (0, y), (self.W * CELL_SIZE, y))
+
+        # Draw snake
+        if self.snake:
+            # Head
+            head_x, head_y = self.snake[0]
+            pygame.draw.rect(
+                self._surface, SNAKE_HEAD,
+                pygame.Rect(head_x * CELL_SIZE, head_y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+            )
+            # Body
+            for x, y in self.snake[1:]:
+                pygame.draw.rect(
+                    self._surface, SNAKE_BODY,
+                    pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                )
+
+        # Draw food
+        if self.food:
+            fx, fy = self.food
+            pygame.draw.rect(
+                self._surface, FOOD,
+                pygame.Rect(fx * CELL_SIZE, fy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+            )
+
+        # Blit to screen and update
+        self._screen.blit(self._surface, (0, 0))
+        pygame.display.flip()
+
+        # Optional: slow down for human view
+        if mode == "human":
+            pygame.time.wait(int(1000 / FPS))
 
 
 
@@ -175,4 +218,13 @@ class Snake(gym.Env):
         # ...
         # return reward, terminated, truncated
         ...
+
+if __name__ == "__main__":
+    try:
+        env = Snake()
+        print("✅ Snake environment loaded successfully!")
+    except Exception as e:
+        print("❌ Failed to load Snake environment!")
+        print("Error:", e)      
+
 
