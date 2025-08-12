@@ -134,20 +134,19 @@ class Snake(gym.Env):
 
     def reset(self, seed=None, options=None):
         """
-
         :param seed:
         :param options:
         :return: return self._get_observation(), self.info
-
         """
-        super().reset(seed=seed)  # If you want Gym's seeding logic
 
         # Starting snake position
         start_x = self.W // 2
         start_y = self.H // 2
-        self.snake = [(start_x, start_y)]  # head only at start
+        self.snake = [(start_x, start_y), (start_x-1, start_y), (start_x-2, start_y)] # [head] [tail1] [tail2]
 
+        # head only at start
         # Starting food position
+
         self.food = (np.random.randint(0, self.W), np.random.randint(0, self.H))
 
         self.direction = 1  # start moving right
@@ -160,7 +159,9 @@ class Snake(gym.Env):
         self._surface = None
         self._pygame_inited = False
 
-        return None, {}  # Gymnasium requires (obs, info)
+        return None, {}  # Gymnasium requires (self.obs, self.info)
+
+
 
 
     # Render in game objects
@@ -179,42 +180,53 @@ class Snake(gym.Env):
         # Fill background
         self._surface.fill(BG)
 
+
+
         # Draw grid lines
         for x in range(0, self.W * CELL_SIZE, CELL_SIZE):
             pygame.draw.line(self._surface, GRID, (x, 0), (x, self.H * CELL_SIZE))
         for y in range(0, self.H * CELL_SIZE, CELL_SIZE):
             pygame.draw.line(self._surface, GRID, (0, y), (self.W * CELL_SIZE, y))
 
-        # Draw snake
+
+
+        # Draw snake this includes the tail
         if self.snake:
-            # Head
-            head_x, head_y = self.snake[0]
-            pygame.draw.rect(
-                self._surface, SNAKE_HEAD,
-                pygame.Rect(head_x * CELL_SIZE, head_y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-            )
-            # Body
-            for x, y in self.snake[1:]:
-                pygame.draw.rect(
-                    self._surface, SNAKE_BODY,
-                    pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
-                )
+            for i, (x, y) in enumerate(self.snake):
+                rect = pygame.Rect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                color = SNAKE_HEAD if i == 0 else SNAKE_BODY
+                pygame.draw.rect(self._surface, color, rect, border_radius=6)
+                # a tiny inner inset for body segments
+                if i != 0:
+                    inset = rect.inflate(-8, -8)
+                    pygame.draw.rect(self._surface, (color[0] // 2, color[1] // 2, color[2] // 2), inset, border_radius=4)
+
+
 
         # Draw food
         if self.food:
             fx, fy = self.food
             pygame.draw.rect(
                 self._surface, FOOD,
-                pygame.Rect(fx * CELL_SIZE, fy * CELL_SIZE, CELL_SIZE, CELL_SIZE)
+                pygame.Rect(fx * CELL_SIZE, fy * CELL_SIZE, CELL_SIZE, CELL_SIZE),
+                border_radius = 6
+
             )
 
-        # Blit to screen and update
+        # HUD ( Score )
+        font = pygame.font.SysFont("consolas,menlo,monospace", 22)
+        hud = font.render(f"Score: {self.score}", True, TEXT)
+        self._surface.blit(hud, (10, 8))
+
+
+        # Blit to screen and update ( surface to screen )
         self._screen.blit(self._surface, (0, 0))
         pygame.display.flip()
 
         # Optional: slow down for human view
         if mode == "human":
             pygame.time.wait(int(1000 / FPS))
+
 
 
 
