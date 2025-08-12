@@ -219,19 +219,8 @@ class Snake(gym.Env):
         # return reward, terminated, truncated
         ...
 
-# if __name__ == "__main__":
-#     try:
-#         print("✅ Snake environment loaded successfully!")
 
-#         env = Snake()
-#         while True:
-#             env.render()
-            
-
-#     except Exception as e:
-#         print("❌ Failed to load Snake environment!")
-#         print("Error:", e)
-
+# Extended code - Windows Hotfix
 if __name__ == "__main__":
     try:
         print("✅ Snake environment loaded successfully!")
