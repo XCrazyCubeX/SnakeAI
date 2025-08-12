@@ -175,6 +175,8 @@ class Snake(gym.Env):
         self.food = (np.random.randint(0, self.W), np.random.randint(0, self.H))
         self.direction = 1  # start moving right
 
+        self._pending_dir = 1
+
         self.score = 0
         self._last_step_ms = pygame.time.get_ticks()
 
