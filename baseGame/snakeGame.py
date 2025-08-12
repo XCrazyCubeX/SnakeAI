@@ -6,11 +6,19 @@ import pygame
 
 
 # --- Config ---
+<<<<<<< HEAD
 CELL_SIZE   =24
 GRID_W      =10
 GRID_H      =10
 FPS         =6 # new speed change
 WRAP        =False  # True = go through walls, False = die on walls
+=======
+CELL_SIZE   = 40
+GRID_W      = 10
+GRID_H      = 10
+FPS         = 6 # new speed change
+WRAP        = False  # True = go through walls, False = die on walls
+>>>>>>> jaabir
 
 # Colors
 BG          =(18, 18, 22)
