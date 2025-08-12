@@ -219,13 +219,35 @@ class Snake(gym.Env):
         # return reward, terminated, truncated
         ...
 
+# if __name__ == "__main__":
+#     try:
+#         print("✅ Snake environment loaded successfully!")
+
+#         env = Snake()
+#         while True:
+#             env.render()
+            
+
+#     except Exception as e:
+#         print("❌ Failed to load Snake environment!")
+#         print("Error:", e)
+
 if __name__ == "__main__":
     try:
         print("✅ Snake environment loaded successfully!")
 
         env = Snake()
-        while True:
+        env.reset()  # initialize snake & food
+
+        running = True
+        while running:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    running = False
+
             env.render()
+
+        pygame.quit()
 
     except Exception as e:
         print("❌ Failed to load Snake environment!")
