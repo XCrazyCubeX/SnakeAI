@@ -97,6 +97,7 @@ class Snake(gym.Env):
         self._last_step_ms = 0
         self._pending_dir = 1
 
+        self._just_reset = False
 
 
     # Get observation
@@ -120,7 +121,8 @@ class Snake(gym.Env):
 
     def step(self, action):
         # accept user input, block 180° turns
-        if action is not None and action in (0, 1, 2, 3) and action != self._OPPOSITE[self.direction]:
+        if (not self._just_reset) and (action is not None) and (action in (0, 1, 2, 3)) \
+                and (action != self._OPPOSITE[self.direction]):
             self._pending_dir = action
 
         # move at fixed interval
@@ -139,17 +141,25 @@ class Snake(gym.Env):
             else:
                 # quick restart on wall
                 if nx < 0 or nx >= self.W or ny < 0 or ny >= self.H:
-                    return self.reset()
+                    self.reset()
+                    self.render()
+                    return None, 0, False, False, {}
 
             # quick restart on self-hit
             if (nx, ny) in self.snake:
-                return self.reset()
+                self.reset()
+                self.render()
+                return None, 0, False, False, {}
 
             # fixed length: push head, pop tail
             self.snake.insert(0, (nx, ny))
             self.snake.pop()
 
+            if self._just_reset:
+                self._just_reset = False
+
         # always render
+
         self.render()
         return None, 0, False, False, {}
 
@@ -166,6 +176,7 @@ class Snake(gym.Env):
         :param options:
         :return: return self._get_observation(), self.info
         """
+        print(self.direction)
         super().reset(seed=seed)
         # Starting snake position
         start_x = self.W // 2
@@ -179,9 +190,10 @@ class Snake(gym.Env):
 
         self.score = 0
         self._last_step_ms = pygame.time.get_ticks()
+        self._just_reset = True  # block input for one move
 
         self.info = {}
-        return self.info, self._get_observation()
+        return None, self.info
 
 
 
@@ -299,6 +311,8 @@ if __name__ == "__main__":
                 if event.type == pygame.QUIT:
                     running = False
                 elif event.type == pygame.KEYDOWN:
+                    # actions: 0=Up, 1=Right, 2=Down, 3=Left
+
                     if event.key in (pygame.K_UP, pygame.K_w):      action_this_frame = 0
                     elif event.key in (pygame.K_RIGHT, pygame.K_d): action_this_frame = 1
                     elif event.key in (pygame.K_DOWN, pygame.K_s):  action_this_frame = 2
@@ -310,7 +324,7 @@ if __name__ == "__main__":
                 current_action = action_this_frame
 
             # step once; your env throttles moves using STEP_EVERY
-            env.step(current_action)
+            env.step(action_this_frame)
 
             # avoid burning CPU; visual FPS cap only
             clock.tick(FPS)
