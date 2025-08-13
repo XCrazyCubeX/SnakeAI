@@ -1,110 +1,123 @@
 import os
-
-# ---- make everything headless BEFORE importing things that may touch X ----
-os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
-os.environ.setdefault("MPLBACKEND", "Agg")            # matplotlib headless
-os.environ.setdefault("QT_QPA_PLATFORM", "offscreen") # Qt headless (just in case)
-
-from multiprocessing import get_context
 import torch
 from stable_baselines3 import PPO
-from env import Snake  # ensure this respects headless (no display init if not needed)
+from env import Snake
+from multiprocessing import Process
 
-# Paths
-MODELS_DIR = "models/PPO"
-LOGS_DIR   = "logs/PPO"
+# Set up directories
+models_dir = f"models/PPO3_NEXT_GEN"
+log_dir = f"logs/PPO3_NEXT_GEN"
 
-def train_model(process_num: int, best_process: str, best_model: str):
-    # device per worker (no CUDA touch at import time)
-    if torch.cuda.is_available():
-        torch.cuda.set_device(process_num % torch.cuda.device_count())
-        device = torch.device(f"cuda:{torch.cuda.current_device()}")
-    else:
-        device = torch.device("cpu")
+# Use cuda as device for faster training
+# current graphics card used for training
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # lazy import for plotting (headless)
-    import matplotlib.pyplot as plt
-    os.makedirs(MODELS_DIR, exist_ok=True)
-    os.makedirs(LOGS_DIR, exist_ok=True)
 
-    # each process its own log dir
-    log_dir_process = os.path.join(LOGS_DIR, f"process_{process_num}")
-    os.makedirs(log_dir_process, exist_ok=True)
+def train_model(process_num, best_process, best_model):
 
-    # build env HEADLESS (no render)
-    env = Snake()   # make sure your env does NOT open a pygame window during training
+    # Create directories if they don't exist
+    # Directory models_dir
+    # Directory log_dir
+    os.makedirs(models_dir, exist_ok=True)
+    os.makedirs(log_dir, exist_ok=True)
+
+    # Create Snake environment
+    # env is the environment class inside the env.py
+    # env.reset() initializes environment
+    env = Snake()
     env.reset()
 
-    total_steps = 50_000
+    # Define how many steps the model trains for
+    # after completed this many steps
+    # the model will save
+    total_steps = 50000
+
+    # Define how many models already exist
+    # This will make the program keep going with newest model
     count = 0
 
+    # Create log dir for each process
+    log_dir_process = os.path.join(log_dir, f"process_{process_num}")
+
+    # Training loop just leave it be
+    # Makes sure the training goes on continuously
     while True:
-        # start fresh or load
+
+        # create new model if no models exist`
+        # if count == 0
         if count == 0:
-            model = PPO(
-                "MlpPolicy",
-                env,
-                verbose=1,
-                device=device,
-                tensorboard_log=log_dir_process,  # only works on fresh init
-            )
+            model = PPO("MlpPolicy",
+                        env, verbose=1,
+                        tensorboard_log=log_dir_process,
+                        device=device,
+                        )
+
+        # Loads in model that is saved to models_dir
+        # process_0_model_0.zip
         else:
-            load_path = f"{MODELS_DIR}/process_{best_process}_model_{best_model}"
-            # NOTE: PPO.load does NOT accept tensorboard_log/verbose kwargs
-            model = PPO.load(load_path, env=env, device=device, print_system_info=False)
-            print(f"[p{process_num}] Loading model {load_path}")
+            model = PPO.load(f"{models_dir}/process_{best_process}_model_{best_model}",
+                             env,
+                             verbose=1,
+                             device=device,
+                             tensorboard_log=log_dir_process,
 
-        # train
-        model.learn(total_timesteps=total_steps, reset_num_timesteps=False, tb_log_name="PPO")
+                             )
 
-        # save
+            print(f"Loading model {models_dir}/process_{best_process}_model_{best_model}")
+
         count += 1
-        save_path = f"{MODELS_DIR}/process_{process_num}_model_{count}"
-        model.save(save_path)
 
-        # update pointers (in-memory only here; if you want cross-proc, write to a small file)
+        # Make it save the model
+        # When you shut down the program
+        # maybe saving on higher graph peaks
+
+        # if pygame.QUIT:
+        #     model.save(f"{models_dir}/process_{process_num}_model_{count}")
+
+        # Train the model
+        model.learn(total_timesteps=total_steps, reset_num_timesteps=False, tb_log_name="PPO3")
+
+        # Save the model at intervals
+        # Intervals are total steps
+        model.save(f"{models_dir}/process_{process_num}_model_{count}")
+
+        # Makes sure the best model and process
+        # Are updated to the most recent
         best_process = process_num
         best_model = count
 
-        # optional: quick heartbeat plot (stays headless)
-        try:
-            plt.figure()
-            plt.plot([0, count])
-            plt.title(f"p{process_num} iters")
-            plt.savefig(os.path.join(log_dir_process, f"heartbeat_{count}.png"))
-            plt.close()
-        except Exception:
-            pass
+        # Close the environment
+        # Not necessary
+        env.close()
 
-    # env.close()  # unreachable in while True
 
-def main():
-    best_process = input("Please select best performing process: ").strip()
-    best_model   = input("Please select best performing model: ").strip()
+if __name__ == "__main__":
 
-    num_processes = 2
+    # define which process and model are the best performing
+    # see tensorboard graph to see which performs best
+    best_process = (input("Please select best performing process: "))
+    best_model = (input("please select best performing model: "))
 
-    # IMPORTANT: use spawn so no X connection is inherited
-    ctx = get_context("spawn")
-    procs = []
+    # Number of processes you want to run
+    # Be careful, higher numbers means, -
+    # Higher GPU load
+    num_processes = 4
+
+    # Create and start processes
+    processes = []
     for i in range(num_processes):
+        ctx = get_context("spawn")
+        procs = []
         p = ctx.Process(target=train_model, args=(i, best_process, best_model), daemon=False)
         p.start()
-        procs.append(p)
+        processes.append(p)
 
     for p in procs:
         p.join()
+        process = Process(target=train_model, args=(i, best_process, best_model))
+        processes.append(process)
+        process.start()
 
-if __name__ == "__main__":
-    # For PyTorch specifically, force spawn as well (no-op if already spawn)
-    try:
-        import torch.multiprocessing as mp
-        mp.set_start_method("spawn", force=True)
-    except Exception:
-        pass
-
-    # Optional: tame CPU thread explosions (more stable multi-proc)
-    os.environ.setdefault("OMP_NUM_THREADS", "1")
-    os.environ.setdefault("MKL_NUM_THREADS", "1")
-
-    main()
+    # Wait for all processes to finish
+    for process in processes:
+        process.join()

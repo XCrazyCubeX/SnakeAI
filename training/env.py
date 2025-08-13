@@ -56,7 +56,7 @@ class Snake(gym.Env):
     Snake environment met pixel-observations (obs).
     Each env.step(action) moves the snake exactly 1 cell.
     """
-    metadata = {'render.modes': ['human']}
+    metadata = {'render.modes': ['human'] }
 
 
 
@@ -76,8 +76,8 @@ class Snake(gym.Env):
         # Define action space
         self.action_space = spaces.Discrete(4)  # up, right, down, left
         # Observation space
-        self.observation_space = spaces.Box(low=1000, high=1000,
-                                            shape=(10,), dtype=np.float32) # float32
+        self.observation_space = spaces.Box(low=0, high=255,
+                                            shape=(10,HEIGHT,WIDTH), dtype=np.float32) # float32
 
         # internal state, snake food, score...
 
@@ -98,6 +98,8 @@ class Snake(gym.Env):
         self._pending_dir = 1
 
         self._just_reset = False
+
+
 
 
     # Get observation
