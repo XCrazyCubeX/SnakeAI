@@ -22,7 +22,7 @@ CELL_SIZE   = 40
 GRID_W      = 10
 GRID_H      = 10
 FPS         = 60
-STEP_EVERY  = 200  # ms between snake steps (lower = faster)
+STEP_EVERY  = 150  # ms between snake steps (lower = faster)
 WRAP        = False  # True = go through walls, False = die on walls
 
 # Colors
@@ -112,7 +112,11 @@ class Snake(gym.Env):
         # obs = np.array([])
         return None
 
-
+    def _rand_empty_cell(self):
+        while True:
+            p = (np.random.randint(0, self.W), np.random.randint(0, self.H))
+            if p not in self.snake:
+                return p
 
     # Step function
     # Return observation, reward, done, info
@@ -121,44 +125,50 @@ class Snake(gym.Env):
 
     def step(self, action):
         # accept user input, block 180° turns
-        if (not self._just_reset) and (action is not None) and (action in (0, 1, 2, 3)) \
+        if (not self._just_reset) and (action in (0, 1, 2, 3)) \
                 and (action != self._OPPOSITE[self.direction]):
             self._pending_dir = action
 
-        # move at fixed interval
         now = pygame.time.get_ticks()
-        if now - self._last_step_ms >= STEP_EVERY:
-            self._last_step_ms = now
-            self.direction = self._pending_dir
+        if now - self._last_step_ms < STEP_EVERY:
+            self.render()
+            return None, 0, False, False, {}
 
-            dx, dy = self._DIRS[self.direction]
-            hx, hy = self.snake[0]
-            nx, ny = hx + dx, hy + dy
+        self._last_step_ms = now
+        self.direction = self._pending_dir
 
-            if self.wrap:
-                nx %= self.W;
-                ny %= self.H
-            else:
-                # quick restart on wall
-                if nx < 0 or nx >= self.W or ny < 0 or ny >= self.H:
-                    self.reset()
-                    self.render()
-                    return None, 0, False, False, {}
+        # compute next head
+        dx, dy = self._DIRS[self.direction]
+        hx, hy = self.snake[0]
+        nx, ny = hx + dx, hy + dy
 
-            # quick restart on self-hit
-            if (nx, ny) in self.snake:
-                self.reset()
+        # walls
+        if self.wrap:
+            nx %= self.W;
+            ny %= self.H
+        else:
+            if nx < 0 or nx >= self.W or ny < 0 or ny >= self.H:
+                self.reset();
                 self.render()
                 return None, 0, False, False, {}
 
-            # fixed length: push head, pop tail
-            self.snake.insert(0, (nx, ny))
-            self.snake.pop()
+        # self-collision
+        if (nx, ny) in self.snake:
+            self.reset();
+            self.render()
+            return None, 0, False, False, {}
 
-            if self._just_reset:
-                self._just_reset = False
+        # move
+        ate = (self.food is not None) and ((nx, ny) == self.food)
+        self.snake.insert(0, (nx, ny))
+        if ate:
+            self.score += 1
+            self.food = self._rand_empty_cell()  # place new food not on snake
+        else:
+            self.snake.pop()  # pop ONCE (no double-pop)
 
-        # always render
+        if self._just_reset:
+            self._just_reset = False
 
         self.render()
         return None, 0, False, False, {}
