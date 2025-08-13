@@ -285,11 +285,6 @@ class Snake(gym.Env):
         terminated = False
         truncated = False
 
-        distance_to_apple = self.snake[0] - self.food
-
-        if distance_to_apple < 10:
-            reward =+ 3
-
         if self.snake[0] == self.food:
             reward =+ 50
 
