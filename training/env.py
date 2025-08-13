@@ -285,12 +285,15 @@ class Snake(gym.Env):
         terminated = False
         truncated = False
 
-        # Check if game should end due to length (optional)
-        if len(self.snake) >= (self.W * self.H) - 1:
-            # Snake fills almost entire grid
-            reward += 100.0
-            terminated = True
-            self.info = {"reason": "won_game"}
+        distance_to_apple = self.snake[0] - self.food
+
+        if distance_to_apple < 10:
+            reward =+ 3
+
+        if self.snake[0] == self.food:
+            reward =+ 50
+
+
 
         return reward, terminated, truncated
 
