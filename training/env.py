@@ -7,9 +7,6 @@ import pygame
 
 
 
-# Frame name
-pygame.display.set_caption('Snake Game')
-
 ####################
 # Global Variables
 ####################
