@@ -5,8 +5,7 @@ import numpy as np
 from gymnasium import spaces
 import pygame
 
-# Initialize Pygame
-pygame.init()
+
 
 # Frame name
 pygame.display.set_caption('Snake Game')
