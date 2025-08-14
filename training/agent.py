@@ -8,8 +8,8 @@ from env import Snake
 from multiprocessing import Process
 from multiprocessing import get_context
 # Set up directories
-models_dir = f"models/PPO3_NEXT_GEN"
-log_dir = f"logs/PPO3_NEXT_GEN"
+models_dir = f"models/PPO"
+log_dir = f"logs/PPO"
 
 # Use cuda as device for faster training
 # current graphics card used for training
@@ -42,7 +42,7 @@ def train_model(process_num, best_process, best_model):
 
     # Define how many models already exist
     # This will make the program keep going with newest model
-    count = 0
+    count = 1
 
     # Create log dir for each process
     log_dir_process = os.path.join(log_dir, f"process_{process_num}")
@@ -90,7 +90,7 @@ def train_model(process_num, best_process, best_model):
         #     model.save(f"{models_dir}/process_{process_num}_model_{count}")
 
         # Train the model
-        model.learn(total_timesteps=total_steps, reset_num_timesteps=False, tb_log_name="PPO3")
+        model.learn(total_timesteps=total_steps, reset_num_timesteps=False, tb_log_name="PPO")
 
         # Save the model at intervals
         # Intervals are total steps
