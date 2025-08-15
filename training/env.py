@@ -276,15 +276,35 @@ class Snake(gym.Env):
         pygame.display.flip()
 
     def _get_rewards(self):
-        """Calculate rewards, termination, and truncation conditions"""
+        """Calculate rewards, termination, and truncation conditions for the Snake AI"""
         reward = 0.0
         terminated = False
         truncated = False
-
-        if self.snake[0] == self.food:
-            reward =+ 50
-
-
+    
+        head_x, head_y = self.snake[0]
+    
+        # Death by wall
+        if not self.wrap and (head_x < 0 or head_x >= self.W or head_y < 0 or head_y >= self.H):
+            reward -= 10.0
+            terminated = True
+    
+        # Death by self-collision
+        elif (head_x, head_y) in self.snake[1:]:
+            reward -= 10.0
+            terminated = True
+    
+        # Food eaten
+        elif self.food is not None and (head_x, head_y) == self.food:
+            reward += 10.0  # Bigger reward for eating
+            self.score += 1
+            self.food = self._rand_empty_cell()
+    
+        # Small step penalty to encourage efficiency
+        else:
+            reward -= 0.05
+    
+        return reward, terminated, truncated
+    
 
         return reward, terminated, truncated
 
