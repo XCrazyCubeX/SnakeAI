@@ -38,12 +38,11 @@ def train_model(process_num, best_process, best_model):
     # Define how many steps the model trains for
     # after completed this many steps
     # the model will save
-    total_steps = 50000
+    total_steps = 100000
 
     # Define how many models already exist
     # This will make the program keep going with newest model
     count = 0
-
     # Create log dir for each process
     log_dir_process = os.path.join(log_dir, f"process_{process_num}")
 
@@ -55,12 +54,11 @@ def train_model(process_num, best_process, best_model):
         # if count == 0
         if count == 0:
             model = PPO("MlpPolicy",
-                        env, verbose=1,
+                        env,
+                        verbose=1,
                         tensorboard_log=log_dir_process,
                         device=device,
-                        learning_rate=3e-4,
-                        clip_range=0.2,
-                        policy_kwargs=dict(net_arch=[64, 64], ortho_init=False)
+
 
                         )
 
@@ -72,9 +70,7 @@ def train_model(process_num, best_process, best_model):
                              verbose=1,
                              device=device,
                              tensorboard_log=log_dir_process,
-                             learning_rate=3e-4,
-                             clip_range=0.2,
-                             policy_kwargs = dict(net_arch=[64, 64], ortho_init=False)
+
 
             )
 
@@ -101,7 +97,7 @@ def train_model(process_num, best_process, best_model):
         best_process = process_num
         best_model = count
 
-        # Close the environment
+        # Close the environment3
         # Not necessary
         env.close()
 

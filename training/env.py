@@ -1,11 +1,11 @@
 # All libraries used for the environment
 # Imports
 import gymnasium as gym
+import tiqme
 import numpy as np
 from gymnasium import spaces
 import pygame
-
-
+from sympy.physics.units import action
 
 ####################
 # Global Variables
@@ -16,7 +16,7 @@ CELL_SIZE = 40
 GRID_W = 10
 GRID_H = 10
 FPS = 60
-STEP_EVERY = 150  # ms between snake steps (lower = faster)
+STEP_EVERY = 30  # ms between snake steps (lower = faster)
 WRAP = False  # True = go through walls, False = die on walls
 
 # Colors
@@ -49,7 +49,7 @@ class Snake(gym.Env):
     _DIRS = np.array([(0, -1), (1, 0), (0, 1), (-1, 0)])
     _OPPOSITE = {0: 2, 2: 0, 1: 3, 3: 1}
 
-    def __init__(self, grid_w=GRID_W, grid_h=GRID_H, wrap=False):
+    def __init__(self, grid_w=GRID_W, grid_h=GRID_H, wrap=False, realtime=False):
         """
         Initialize snake game with proper observation and action spaces
         """
@@ -58,7 +58,7 @@ class Snake(gym.Env):
         self.W = int(grid_w)
         self.H = int(grid_h)
         self.wrap = bool(wrap)
-
+        self.realtime = bool(realtime)
         # Define action space
         self.action_space = spaces.Discrete(4)  # up, right, down, left
 
@@ -66,7 +66,7 @@ class Snake(gym.Env):
         self.observation_space = spaces.Box(
             low=-np.inf,
             high=np.inf,
-            shape=(10,),
+            shape=(11,),
             dtype=np.float32
         )
 
@@ -74,6 +74,8 @@ class Snake(gym.Env):
         self.snake = None
         self.direction = 1  # start right
         self.food = None
+        self._prev_food_dist = None
+
         self.score = 0
         self._rng = None
         self._last_obs = None
@@ -92,6 +94,7 @@ class Snake(gym.Env):
         if not self.snake or len(self.snake) == 0:
             # Return zeros if snake doesn't exist
             return np.zeros(10, dtype=np.float32)
+        dist_food = self._distance_to_food()
 
         hx, hy = self.snake[0]
         fx, fy = self.food if self.food is not None else (-1, -1)
@@ -114,7 +117,7 @@ class Snake(gym.Env):
         obs = np.array([
             float(dx), float(dy),
             dist_left, dist_right, dist_up, dist_down,
-            dir_one_hot[0], dir_one_hot[1], dir_one_hot[2], dir_one_hot[3]
+            dir_one_hot[0], dir_one_hot[1], dir_one_hot[2], dir_one_hot[3], dist_food,
         ], dtype=np.float32)
 
         # Check for NaN or infinite values
@@ -140,30 +143,16 @@ class Snake(gym.Env):
         return (0, 0)
 
     def step(self, action):
-        """Execute one step in the environment"""
-        # Get current observation first
-        obs = self._get_observation()
+        self.render()
+        obs_before = self._get_observation()
 
-        # Validate action
+        # Validate action and block 180° turns
         if not (0 <= action <= 3):
-            action = 1  # Default to right if invalid action
+            action = self.direction
+        if action != self._OPPOSITE[self.direction]:
+            self.direction = action
 
-        # Accept user input, block 180° turns
-        if (not self._just_reset) and (action in (0, 1, 2, 3)) \
-                and (action != self._OPPOSITE[self.direction]):
-            self._pending_dir = action
-
-        # Time-based movement
-        now = pygame.time.get_ticks()
-        if now - self._last_step_ms < STEP_EVERY:
-            if hasattr(self, 'render'):
-                self.render()
-            return obs, 0.0, False, False, {}
-
-        self._last_step_ms = now
-        self.direction = self._pending_dir
-
-        # Compute next head position
+        # Move one cell
         dx, dy = self._DIRS[self.direction]
         hx, hy = self.snake[0]
         nx, ny = hx + dx, hy + dy
@@ -174,57 +163,48 @@ class Snake(gym.Env):
             ny %= self.H
         else:
             if nx < 0 or nx >= self.W or ny < 0 or ny >= self.H:
-                # Game over - hit wall
-                reward = -10.0
-                return obs, reward, True, False, {"reason": "hit_wall"}
+                # hit wall -> end immediately
+                reward = -30.0
+                return obs_before, reward, True, False, {"reason": "hit_wall"}
 
-        # Check self-collision
-        if (nx, ny) in self.snake:
-            # Game over - hit self
-            reward = -10.0
-            return obs, reward, True, False, {"reason": "hit_self"}
-
-        # Move snake
+        # Check self-collision (with current body except last tail if we’ll move)
         ate_food = (self.food is not None) and ((nx, ny) == self.food)
-        self.snake.insert(0, (nx, ny))
+        next_body = [(nx, ny)] + self.snake[:-1] if not ate_food else [(nx, ny)] + self.snake
+        if (nx, ny) in self.snake[1:] and not ate_food:
+            # Would bite itself
+            reward = -50.0
+            return obs_before, reward, True, False, {"reason": "hit_self"}
 
+        # Apply move
+        self.snake.insert(0, (nx, ny))
         if ate_food:
             self.score += 1
             self.food = self._rand_empty_cell()
-            reward = 10.0  # Reward for eating food
         else:
             self.snake.pop()
-            reward = -0.1  # Small negative reward to encourage efficiency
 
-        if self._just_reset:
-            self._just_reset = False
+        # Compute reward AFTER moving
+        reward, terminated, truncated = self._get_rewards(ate_food)
 
-        # Get rewards and check game state
-        additional_reward, terminated, truncated = self._get_rewards()
-        total_reward = reward + additional_reward
-
-        if hasattr(self, 'render'):
+        if hasattr(self, 'render') and self.realtime:
             self.render()
 
-        return self._get_observation(), total_reward, terminated, truncated, self.info
+        return self._get_observation(), reward, terminated, truncated, self.info
 
     def reset(self, seed=None, options=None):
-        """Reset the environment to initial state"""
         super().reset(seed=seed)
-
-        # Starting snake position
         start_x = self.W // 2
         start_y = self.H // 2
-
         self.snake = [(start_x, start_y), (start_x - 1, start_y), (start_x - 2, start_y)]
         self.food = self._rand_empty_cell()
-        self.direction = 1  # start moving right
+        self.direction = 1
         self._pending_dir = 1
         self.score = 0
-        self._last_step_ms = pygame.time.get_ticks()
         self._just_reset = True
+        # For RL training, don’t gate by real time:
+        self._last_step_ms = 0
         self.info = {}
-
+        self._prev_food_dist = self._distance_to_food()
         return self._get_observation(), self.info
 
     def render(self, mode='human'):
@@ -275,36 +255,39 @@ class Snake(gym.Env):
         self._screen.blit(self._surface, (0, 0))
         pygame.display.flip()
 
-    def _get_rewards(self):
-        """Calculate rewards, termination, and truncation conditions for the Snake AI"""
+    def _distance_to_food(self):
+        hx, hy = self.snake[0]
+        fx, fy = self.food if self.food is not None else (-1, -1)
+
+        # Manhattan:
+        return abs(fx - hx) + abs(fy - hy)
+
+    def _get_rewards(self, ate_food: bool):
         reward = 0.0
         terminated = False
         truncated = False
-    
+
         head_x, head_y = self.snake[0]
-    
-        # Death by wall
+
+        # Terminal checks already handled in step for wall/self, but keep a safety net:
         if not self.wrap and (head_x < 0 or head_x >= self.W or head_y < 0 or head_y >= self.H):
-            reward -= 10.0
-            terminated = True
-    
-        # Death by self-collision
-        elif (head_x, head_y) in self.snake[1:]:
-            reward -= 10.0
-            terminated = True
-    
-        # Food eaten
-        elif self.food is not None and (head_x, head_y) == self.food:
-            reward += 10.0  # Bigger reward for eating
-            self.score += 1
-            self.food = self._rand_empty_cell()
-    
-        # Small step penalty to encourage efficiency
-        else:
-            reward -= 0.05
-    
-        return reward, terminated, truncated
-    
+            return -30.0, True, False
+        if (head_x, head_y) in self.snake[1:]:
+            return -50.0, True, False
+
+        # Distance shaping: reward moving closer, punish moving away
+        curr_dist = self._distance_to_food()
+        if self._prev_food_dist is not None:
+            delta = float(self._prev_food_dist - curr_dist)  # positive if closer
+            reward += 0.2 * delta
+        self._prev_food_dist = curr_dist
+
+        # Small living penalty to prevent dithering
+        reward -= 0.01
+
+        # Apple eaten bonus
+        if ate_food:
+            reward += 10.0 + 0.5 * len(self.snake)  # scaled a bit by length
 
         return reward, terminated, truncated
 
