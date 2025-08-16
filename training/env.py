@@ -1,7 +1,7 @@
 # All libraries used for the environment
 # Imports
 import gymnasium as gym
-import tiqme
+import time
 import numpy as np
 from gymnasium import spaces
 import pygame
@@ -16,7 +16,7 @@ CELL_SIZE = 40
 GRID_W = 10
 GRID_H = 10
 FPS = 60
-STEP_EVERY = 30  # ms between snake steps (lower = faster)
+STEP_EVERY = 1  # ms between snake steps (lower = faster)
 WRAP = False  # True = go through walls, False = die on walls
 
 # Colors
