@@ -7,19 +7,21 @@ from stable_baselines3 import PPO
 from env import Snake
 from multiprocessing import Process
 from multiprocessing import get_context
+
+
 # Set up directories
-models_dir = f"models/PPO"
-log_dir = f"logs/PPO"
+models_dir = f"training/models/"
+log_dir = f"training/logs/"
 
 # Use cuda as device for faster training
 # current graphics card used for training
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # lazy import for plotting (headless)
-
-
 os.makedirs(models_dir, exist_ok=True)
 os.makedirs(log_dir, exist_ok=True)
+
+
 
 def train_model(process_num, best_process, best_model):
 
@@ -42,7 +44,7 @@ def train_model(process_num, best_process, best_model):
 
     # Define how many models already exist
     # This will make the program keep going with newest model
-    count = 0
+    count = 27
     # Create log dir for each process
     log_dir_process = os.path.join(log_dir, f"process_{process_num}")
 
@@ -55,8 +57,9 @@ def train_model(process_num, best_process, best_model):
         if count == 0:
             model = PPO("MlpPolicy",
                         env,
+
+                        tensorboard_log=log_dir,
                         verbose=1,
-                        tensorboard_log=log_dir_process,
                         device=device,
 
 
@@ -67,10 +70,9 @@ def train_model(process_num, best_process, best_model):
         else:
             model = PPO.load(f"{models_dir}/process_{best_process}_model_{best_model}",
                              env,
+                             tensorboard_log=log_dir,
                              verbose=1,
                              device=device,
-                             tensorboard_log=log_dir_process,
-
 
             )
 
@@ -86,7 +88,7 @@ def train_model(process_num, best_process, best_model):
         #     model.save(f"{models_dir}/process_{process_num}_model_{count}")
 
         # Train the model
-        model.learn(total_timesteps=total_steps, reset_num_timesteps=False, tb_log_name="PPO")
+        model.learn(total_timesteps=total_steps, reset_num_timesteps=False, tb_log_name=f"process_{process_num}")
 
         # Save the model at intervals
         # Intervals are total steps
@@ -112,7 +114,7 @@ if __name__ == "__main__":
     # Number of processes you want to run
     # Be careful, higher numbers means, -
     # Higher GPU load
-    num_processes = 4
+    num_processes = 6
 
     # Create and start processes
     processes = []

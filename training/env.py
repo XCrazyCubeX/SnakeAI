@@ -49,7 +49,7 @@ class Snake(gym.Env):
     _DIRS = np.array([(0, -1), (1, 0), (0, 1), (-1, 0)])
     _OPPOSITE = {0: 2, 2: 0, 1: 3, 3: 1}
 
-    def __init__(self, grid_w=GRID_W, grid_h=GRID_H, wrap=False, realtime=False):
+    def __init__(self, grid_w=GRID_W, grid_h=GRID_H, wrap=False):
         """
         Initialize snake game with proper observation and action spaces
         """
@@ -58,7 +58,8 @@ class Snake(gym.Env):
         self.W = int(grid_w)
         self.H = int(grid_h)
         self.wrap = bool(wrap)
-        self.realtime = bool(realtime)
+
+        self._clock = None
         # Define action space
         self.action_space = spaces.Discrete(4)  # up, right, down, left
 
@@ -143,8 +144,24 @@ class Snake(gym.Env):
         return (0, 0)
 
     def step(self, action):
+        # throttle movement to STEP_EVERY (ms), always
+        now_ms = pygame.time.get_ticks() if pygame.get_init() else int(time.time() * 1000)
+        wait_ms = STEP_EVERY - (now_ms - self._last_step_ms)
+        if wait_ms > 0:
+            if pygame.get_init():
+                pygame.time.wait(wait_ms)
+            else:
+                time.sleep(wait_ms / 1000.0)
+        self._last_step_ms = pygame.time.get_ticks() if pygame.get_init() else int(time.time() * 1000)
+
+        # keep window responsive
+        if pygame.get_init():
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    self.close()
         self.render()
         obs_before = self._get_observation()
+
 
         # Validate action and block 180° turns
         if not (0 <= action <= 3):
@@ -163,8 +180,7 @@ class Snake(gym.Env):
             ny %= self.H
         else:
             if nx < 0 or nx >= self.W or ny < 0 or ny >= self.H:
-                # hit wall -> end immediately
-                reward = -30.0
+                reward =- 100
                 return obs_before, reward, True, False, {"reason": "hit_wall"}
 
         # Check self-collision (with current body except last tail if we’ll move)
@@ -172,7 +188,7 @@ class Snake(gym.Env):
         next_body = [(nx, ny)] + self.snake[:-1] if not ate_food else [(nx, ny)] + self.snake
         if (nx, ny) in self.snake[1:] and not ate_food:
             # Would bite itself
-            reward = -50.0
+            reward = -300.0
             return obs_before, reward, True, False, {"reason": "hit_self"}
 
         # Apply move
@@ -186,8 +202,7 @@ class Snake(gym.Env):
         # Compute reward AFTER moving
         reward, terminated, truncated = self._get_rewards(ate_food)
 
-        if hasattr(self, 'render') and self.realtime:
-            self.render()
+        self.render()
 
         return self._get_observation(), reward, terminated, truncated, self.info
 
@@ -201,7 +216,6 @@ class Snake(gym.Env):
         self._pending_dir = 1
         self.score = 0
         self._just_reset = True
-        # For RL training, don’t gate by real time:
         self._last_step_ms = 0
         self.info = {}
         self._prev_food_dist = self._distance_to_food()
@@ -216,6 +230,7 @@ class Snake(gym.Env):
             self._surface = pygame.Surface(self._screen.get_size())
             pygame.display.set_caption("Snake Game")
             self._pygame_inited = True
+            self._clock = pygame.time.Clock()
 
         # Fill background
         self._surface.fill(BG)
@@ -269,21 +284,16 @@ class Snake(gym.Env):
 
         head_x, head_y = self.snake[0]
 
-        # Terminal checks already handled in step for wall/self, but keep a safety net:
-        if not self.wrap and (head_x < 0 or head_x >= self.W or head_y < 0 or head_y >= self.H):
-            return -30.0, True, False
-        if (head_x, head_y) in self.snake[1:]:
-            return -50.0, True, False
 
         # Distance shaping: reward moving closer, punish moving away
         curr_dist = self._distance_to_food()
         if self._prev_food_dist is not None:
             delta = float(self._prev_food_dist - curr_dist)  # positive if closer
-            reward += 0.2 * delta
+            reward += 1 * delta
         self._prev_food_dist = curr_dist
 
-        # Small living penalty to prevent dithering
-        reward -= 0.01
+        # encourage for staying alive
+        reward += 1
 
         # Apple eaten bonus
         if ate_food:
