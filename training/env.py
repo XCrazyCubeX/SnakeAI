@@ -85,7 +85,7 @@ class Snake(gym.Env):
         self._screen = None
         self._surface = None
         self._pygame_inited = False
-        self._last_step_ms = 0
+        self._last_step_ms = self._now_ms() - int(STEP_EVERY)
         self._pending_dir = 1
         self._just_reset = False
         self.info = {}
@@ -149,7 +149,7 @@ class Snake(gym.Env):
         wait_ms = STEP_EVERY - (now_ms - self._last_step_ms)
         if wait_ms > 0:
             if pygame.get_init():
-                pygame.time.wait(wait_ms)
+                self._throttle_step()
             else:
                 time.sleep(wait_ms / 1000.0)
         self._last_step_ms = pygame.time.get_ticks() if pygame.get_init() else int(time.time() * 1000)
@@ -221,6 +221,35 @@ class Snake(gym.Env):
         self._prev_food_dist = self._distance_to_food()
         return self._get_observation(), self.info
 
+    def _now_ms(self):
+        # Prefer monotonic clock; fall back to pygame if video init is fine
+        try:
+            if pygame.get_init() and pygame.display.get_init():
+                return int(pygame.time.get_ticks())
+        except Exception:
+            pass
+        # Monotonic, cross-platform
+        return int(time.perf_counter_ns() // 1_000_000)
+
+    def _throttle_step(self):
+        now = self._now_ms()
+        elapsed = now - self._last_step_ms
+        wait_ms = STEP_EVERY - elapsed
+
+        # Clamp and cast for Windows
+        ms = int(max(0, wait_ms))
+        if ms > 0:
+            try:
+                if pygame.get_init():
+                    # delay is slightly safer than wait on Windows
+                    pygame.time.delay(ms)
+                else:
+                    time.sleep(ms / 1000.0)
+            except Exception:
+                # last-ditch fallback
+                time.sleep(ms / 1000.0)
+
+        self._last_step_ms = self._now_ms()
     def render(self, mode='human'):
         """Render the game"""
         # Initialize pygame screen only once

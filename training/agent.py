@@ -44,7 +44,7 @@ def train_model(process_num, best_process, best_model):
 
     # Define how many models already exist
     # This will make the program keep going with newest model
-    count = 27
+    count = 53
     # Create log dir for each process
     log_dir_process = os.path.join(log_dir, f"process_{process_num}")
 
