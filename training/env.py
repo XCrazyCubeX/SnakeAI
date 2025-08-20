@@ -16,7 +16,7 @@ CELL_SIZE = 40
 GRID_W = 10
 GRID_H = 10
 FPS = 60
-STEP_EVERY = 1  # ms between snake steps (lower = faster)
+STEP_EVERY = 1000 # ms between snake steps (lower = faster)
 WRAP = False  # True = go through walls, False = die on walls
 
 # Colors
@@ -33,6 +33,19 @@ N_CHANNELS = 3
 HEIGHT = GRID_H
 WIDTH = GRID_W
 
+OPPOSITE = (2, 3, 0, 1)  # 0:up,1:right,2:down,3:left
+
+
+def _int_scalar(x, name="value"):
+    a = np.asarray(x)
+    if a.shape == ():  # 0-D numpy -> python int
+        return int(a.item())
+    if a.ndim == 1 and a.size == 1:  # shape (1,)
+        return int(a[0])
+    # decode one-hot accidentally passed in
+    if a.ndim == 1 and a.size == 4 and ((a == 0) | (a == 1)).all():
+        return int(a.argmax())
+    return int(a)  # last resort
 
 ##########################
 # Snake Environment
@@ -47,7 +60,7 @@ class Snake(gym.Env):
 
     # actions: 0=Up, 1=Right, 2=Down, 3=Left
     _DIRS = np.array([(0, -1), (1, 0), (0, 1), (-1, 0)])
-    _OPPOSITE = {0: 2, 2: 0, 1: 3, 3: 1}
+
 
     def __init__(self, grid_w=GRID_W, grid_h=GRID_H, wrap=False):
         """
@@ -61,7 +74,8 @@ class Snake(gym.Env):
 
         self._clock = None
         # Define action space
-        self.action_space = spaces.Discrete(4)  # up, right, down, left
+        self.action_space = spaces.Discrete(4)
+        self.direction = 1  # make sure it's a plain int
 
         # Fixed observation space with proper bounds
         self.observation_space = spaces.Box(
@@ -73,7 +87,6 @@ class Snake(gym.Env):
 
         # Internal state
         self.snake = None
-        self.direction = 1  # start right
         self.food = None
         self._prev_food_dist = None
 
@@ -164,9 +177,14 @@ class Snake(gym.Env):
 
 
         # Validate action and block 180° turns
-        if not (0 <= action <= 3):
-            action = self.direction
-        if action != self._OPPOSITE[self.direction]:
+        action = _int_scalar(action, "action")
+        self.direction = _int_scalar(self.direction, "direction")
+
+        if not self.action_space.contains(action):
+            raise ValueError(f"Invalid action {action}, expected 0..3")
+
+        # prevent instant reverse
+        if action != OPPOSITE[self.direction]:
             self.direction = action
 
         # Move one cell
@@ -212,7 +230,7 @@ class Snake(gym.Env):
         start_y = self.H // 2
         self.snake = [(start_x, start_y), (start_x - 1, start_y), (start_x - 2, start_y)]
         self.food = self._rand_empty_cell()
-        self.direction = 1
+        self.direction = int(self.direction)
         self._pending_dir = 1
         self.score = 0
         self._just_reset = True
@@ -242,7 +260,7 @@ class Snake(gym.Env):
 
         wait_ms = int(max(0, STEP_EVERY - elapsed))
         # Hard cap to avoid Windows freaking out on big sleeps
-        wait_ms = min(wait_ms, 1000)  # cap 1s per step, adjust if you need
+        wait_ms = min(wait_ms, 100)  # cap 1s per step, adjust if you need
 
         if wait_ms > 0:
             # Use a single path; delay or sleep both fine after clamping
