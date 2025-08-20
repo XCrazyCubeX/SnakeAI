@@ -225,7 +225,7 @@ class Snake(gym.Env):
         # Prefer monotonic clock; fall back to pygame if video init is fine
         try:
             if pygame.get_init() and pygame.display.get_init():
-                return int(pygame.time.get_ticks())
+                return int(time.perf_counter_ns() // 1_000_000)
         except Exception:
             pass
         # Monotonic, cross-platform
@@ -234,20 +234,24 @@ class Snake(gym.Env):
     def _throttle_step(self):
         now = self._now_ms()
         elapsed = now - self._last_step_ms
-        wait_ms = STEP_EVERY - elapsed
 
-        # Clamp and cast for Windows
-        ms = int(max(0, wait_ms))
-        if ms > 0:
-            try:
-                if pygame.get_init():
-                    # delay is slightly safer than wait on Windows
-                    pygame.time.delay(ms)
-                else:
-                    time.sleep(ms / 1000.0)
-            except Exception:
-                # last-ditch fallback
-                time.sleep(ms / 1000.0)
+        # If timer jumped (negative or way too large), resync to avoid huge sleeps
+        if elapsed < 0 or elapsed > 10 * STEP_EVERY:
+            self._last_step_ms = now - int(STEP_EVERY)
+            elapsed = STEP_EVERY
+
+        wait_ms = int(max(0, STEP_EVERY - elapsed))
+        # Hard cap to avoid Windows freaking out on big sleeps
+        wait_ms = min(wait_ms, 1000)  # cap 1s per step, adjust if you need
+
+        if wait_ms > 0:
+            # Use a single path; delay or sleep both fine after clamping
+            if pygame.get_init():
+                pygame.time.delay(wait_ms)  # safer than wait on Windows
+            else:
+                time.sleep(wait_ms / 1000.0)
+
+        self._last_step_ms = self._now_ms()
 
         self._last_step_ms = self._now_ms()
     def render(self, mode='human'):
