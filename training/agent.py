@@ -1,17 +1,15 @@
 import os
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'
-
 import torch
 from stable_baselines3 import PPO
-
 from env import Snake
 from multiprocessing import Process
 from multiprocessing import get_context
-
+import pygame
 
 # Set up directories
-models_dir = f"training/models/"
-log_dir = f"training/logs/"
+models_dir = f"training/models/PPO"
+log_dir = f"training/logs/PPO"
 
 # Use cuda as device for faster training
 # current graphics card used for training
@@ -23,7 +21,7 @@ os.makedirs(log_dir, exist_ok=True)
 
 
 
-def train_model(process_num, best_process, best_model):
+def train_model(process_num, best_model):
 
     # Create directories if they don't exist
     # Directory models_dir
@@ -44,9 +42,8 @@ def train_model(process_num, best_process, best_model):
 
     # Define how many models already exist
     # This will make the program keep going with newest model
-    count = 53
+    count = 63
     # Create log dir for each process
-    log_dir_process = os.path.join(log_dir, f"process_{process_num}")
 
     # Training loop just leave it be
     # Makes sure the training goes on continuously
@@ -57,26 +54,22 @@ def train_model(process_num, best_process, best_model):
         if count == 0:
             model = PPO("MlpPolicy",
                         env,
-
                         tensorboard_log=log_dir,
                         verbose=1,
                         device=device,
-
-
                         )
 
         # Loads in model that is saved to models_dir
         # process_0_model_0.zip
         else:
-            model = PPO.load(f"{models_dir}/process_{best_process}_model_{best_model}",
+            model = PPO.load(f"{models_dir}/{best_model}",
                              env,
                              tensorboard_log=log_dir,
                              verbose=1,
                              device=device,
-
             )
 
-            print(f"Loading model {models_dir}/process_{best_process}_model_{best_model}")
+            print(f"Loading model {models_dir}/model: {best_model}")
 
         count += 1
 
@@ -84,20 +77,19 @@ def train_model(process_num, best_process, best_model):
         # When you shut down the program
         # maybe saving on higher graph peaks
 
-        # if pygame.QUIT:
-        #     model.save(f"{models_dir}/process_{process_num}_model_{count}")
+        if pygame.QUIT:
+            model.save(f"{models_dir}/{process_num}{count}")
 
         # Train the model
-        model.learn(total_timesteps=total_steps, reset_num_timesteps=False, tb_log_name=f"process_{process_num}")
+        model.learn(total_timesteps=total_steps, reset_num_timesteps=False, tb_log_name=f"process: {process_num}")
 
         # Save the model at intervals
         # Intervals are total steps
-        model.save(f"{models_dir}/process_{process_num}_model_{count}")
+        model.save(f"{models_dir}/{process_num}{count}")
 
         # Makes sure the best model and process
         # Are updated to the most recent
-        best_process = process_num
-        best_model = count
+        best_model = str(process_num) + str(count)
 
         # Close the environment3
         # Not necessary
@@ -108,7 +100,6 @@ if __name__ == "__main__":
 
     # define which process and model are the best performing
     # see tensorboard graph to see which performs best
-    best_process = (input("Please select best performing process: "))
     best_model = (input("please select best performing model: "))
 
     # Number of processes you want to run
@@ -121,13 +112,13 @@ if __name__ == "__main__":
     for i in range(num_processes):
         ctx = get_context("spawn")
         procs = []
-        p = ctx.Process(target=train_model, args=(i, best_process, best_model), daemon=False)
+        p = ctx.Process(target=train_model, args=(i, best_model), daemon=False)
         p.start()
         processes.append(p)
 
     for p in procs:
         p.join()
-        process = Process(target=train_model, args=(i, best_process, best_model))
+        process = Process(target=train_model, args=(i, best_model))
         processes.append(process)
         process.start()
 
