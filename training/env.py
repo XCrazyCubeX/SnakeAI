@@ -233,6 +233,7 @@ class Snake(gym.Env):
 
 
 
+
     def reset(self, seed=None, options=None):
         """
         Reset the environment and return an initial observation.
@@ -366,8 +367,6 @@ class Snake(gym.Env):
         if self._pygame_inited:
             pygame.quit()
             self._pygame_inited = False
-
-
 
 
 
