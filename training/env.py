@@ -1,11 +1,11 @@
 # All libraries used for the environment
 # Imports
+
 import gymnasium as gym
 import time
 import numpy as np
 from gymnasium import spaces
 import pygame
-from sympy.physics.units import action
 
 ####################
 # Global Variables
@@ -16,7 +16,7 @@ CELL_SIZE = 40
 GRID_W = 10
 GRID_H = 10
 FPS = 60
-STEP_EVERY = 1000 # ms between snake steps (lower = faster)
+STEP_EVERY = 60 # ms between snake steps (lower = faster)
 WRAP = False  # True = go through walls, False = die on walls
 
 # Colors
@@ -33,10 +33,18 @@ N_CHANNELS = 3
 HEIGHT = GRID_H
 WIDTH = GRID_W
 
-OPPOSITE = (2, 3, 0, 1)  # 0:up,1:right,2:down,3:left
+
+# actions: 0=Up, 1=Right, 2=Down, 3=Left
+_DIRS = np.array([(0, -1), (1, 0), (0, 1), (-1, 0)])
+# 0:up,1:right,2:down,3:left
+OPPOSITE = (2, 3, 0, 1)
 
 
-def _int_scalar(x, name="value"):
+# some sort of windows hotfix
+# makes sure the program does not use too much floats.
+# instead using ints only
+
+def _int_scalar(x):
     a = np.asarray(x)
     if a.shape == ():  # 0-D numpy -> python int
         return int(a.item())
@@ -47,54 +55,55 @@ def _int_scalar(x, name="value"):
         return int(a.argmax())
     return int(a)  # last resort
 
-##########################
+
+
 # Snake Environment
-##########################
+# This is the full snake Environment.
+#
 
 class Snake(gym.Env):
     """
     Snake environment with proper observations.
     Each env.step(action) moves the snake exactly 1 cell.
     """
-    metadata = {'render.modes': ['human']}
 
-    # actions: 0=Up, 1=Right, 2=Down, 3=Left
-    _DIRS = np.array([(0, -1), (1, 0), (0, 1), (-1, 0)])
-
-
-    def __init__(self, grid_w=GRID_W, grid_h=GRID_H, wrap=False):
-        """
-        Initialize snake game with proper observation and action spaces
-        """
+    def __init__(self, throttle=False, grid_w=GRID_W, grid_h=GRID_H, wrap=False):
         super(Snake, self).__init__()
 
+        """
+        Initialize snake game with proper observation and action spaces
+        :param grid_w: width of grid
+        :param grid_h: height of grid
+        :param wrap: wrap around the game
+        """
+        self.render_mode = "human"
+        self.throttle = throttle
+
+        # Define action space and observation space
+        self.action_space = spaces.Discrete(4)
+        self.observation_space = spaces.Box(
+            low=-np.inf,
+            high=np.inf,
+            shape=(13,),
+            dtype=np.float32
+        )
+
+        # Dimensions
         self.W = int(grid_w)
         self.H = int(grid_h)
         self.wrap = bool(wrap)
 
-        self._clock = None
-        # Define action space
-        self.action_space = spaces.Discrete(4)
-        self.direction = 1  # make sure it's a plain int
-
-        # Fixed observation space with proper bounds
-        self.observation_space = spaces.Box(
-            low=-np.inf,
-            high=np.inf,
-            shape=(11,),
-            dtype=np.float32
-        )
-
         # Internal state
         self.snake = None
         self.food = None
-        self._prev_food_dist = None
-
         self.score = 0
+        self.direction = 1  # make sure it's a plain int
         self._rng = None
         self._last_obs = None
 
+
         # Pygame stuff
+        self._clock = None
         self._screen = None
         self._surface = None
         self._pygame_inited = False
@@ -103,18 +112,32 @@ class Snake(gym.Env):
         self._just_reset = False
         self.info = {}
 
+        self._DIRS = _DIRS
+
+
+
+
+
     def _get_observation(self):
-        """Get current observation with proper error checking"""
+        """
+        Get current observation with proper error checking
+        :param self: observation
+        :return obs
+        """
+
         if not self.snake or len(self.snake) == 0:
             # Return zeros if snake doesn't exist
-            return np.zeros(10, dtype=np.float32)
-        dist_food = self._distance_to_food()
+            return np.zeros(13, dtype=np.float32)
 
+
+        # hx = HeadX, hy = HeadY
+        # fx = FoodX, fy = FoodY
         hx, hy = self.snake[0]
         fx, fy = self.food if self.food is not None else (-1, -1)
 
-        # Calculate relative distances
-        dx, dy = fx - hx, fy - hy
+
+        #distance to food
+        dist_food = self._distance_to_food()
 
         # Distance to walls
         dist_left = float(hx)
@@ -127,14 +150,28 @@ class Snake(gym.Env):
         if 0 <= self.direction < 4:
             dir_one_hot[self.direction] = 1.0
 
+
         # Create observation array with proper dtype
+        # 13 Observations
         obs = np.array([
-            float(dx), float(dy),
-            dist_left, dist_right, dist_up, dist_down,
-            dir_one_hot[0], dir_one_hot[1], dir_one_hot[2], dir_one_hot[3], dist_food,
+            hx,
+            hy,
+            fx,
+            fy,
+            dist_left,
+            dist_right,
+            dist_up,
+            dist_down,
+            dir_one_hot[0],
+            dir_one_hot[1],
+            dir_one_hot[2],
+            dir_one_hot[3],
+            dist_food,
         ], dtype=np.float32)
 
+
         # Check for NaN or infinite values
+        # I have no idea, it works
         if not np.isfinite(obs).all():
             print(f"WARNING: Non-finite observation detected: {obs}")
             # Replace NaN/inf with zeros
@@ -142,138 +179,88 @@ class Snake(gym.Env):
 
         return obs
 
-    def _rand_empty_cell(self):
-        """Generate random empty cell not occupied by snake"""
-        max_attempts = self.W * self.H
-        attempts = 0
 
-        while attempts < max_attempts:
-            p = (np.random.randint(0, self.W), np.random.randint(0, self.H))
-            if p not in self.snake:
-                return p
-            attempts += 1
 
-        # Fallback if no empty cell found (shouldn't happen in normal gameplay)
-        return (0, 0)
 
     def step(self, action):
-        # throttle movement to STEP_EVERY (ms), always
-        now_ms = pygame.time.get_ticks() if pygame.get_init() else int(time.time() * 1000)
-        wait_ms = STEP_EVERY - (now_ms - self._last_step_ms)
-        if wait_ms > 0:
-            if pygame.get_init():
-                self._throttle_step()
-            else:
-                time.sleep(wait_ms / 1000.0)
-        self._last_step_ms = pygame.time.get_ticks() if pygame.get_init() else int(time.time() * 1000)
+
+        if self.throttle:
+            self._throttle_step()
 
         # keep window responsive
-        if pygame.get_init():
+        if self.render_mode == "human":
+            self.render()
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self.close()
-        self.render()
-        obs_before = self._get_observation()
+
 
 
         # Validate action and block 180° turns
-        action = _int_scalar(action, "action")
-        self.direction = _int_scalar(self.direction, "direction")
+        action = _int_scalar(action)
+        self.direction = _int_scalar(self.direction)
 
         if not self.action_space.contains(action):
             raise ValueError(f"Invalid action {action}, expected 0..3")
-
-        # prevent instant reverse
         if action != OPPOSITE[self.direction]:
             self.direction = action
 
-        # Move one cell
+
         dx, dy = self._DIRS[self.direction]
         hx, hy = self.snake[0]
         nx, ny = hx + dx, hy + dy
 
-        # Handle walls
-        if self.wrap:
-            nx %= self.W
-            ny %= self.H
-        else:
-            if nx < 0 or nx >= self.W or ny < 0 or ny >= self.H:
-                reward =- 100
-                return obs_before, reward, True, False, {"reason": "hit_wall"}
 
-        # Check self-collision (with current body except last tail if we’ll move)
         ate_food = (self.food is not None) and ((nx, ny) == self.food)
-        next_body = [(nx, ny)] + self.snake[:-1] if not ate_food else [(nx, ny)] + self.snake
-        if (nx, ny) in self.snake[1:] and not ate_food:
-            # Would bite itself
-            reward = -300.0
-            return obs_before, reward, True, False, {"reason": "hit_self"}
+        reward, terminated, truncated = self._get_rewards(ate_food)
+        if terminated:
+            return self._get_observation(), float(reward), True, False, dict(self.info)
+
 
         # Apply move
         self.snake.insert(0, (nx, ny))
+
         if ate_food:
             self.score += 1
             self.food = self._rand_empty_cell()
         else:
             self.snake.pop()
 
-        # Compute reward AFTER moving
-        reward, terminated, truncated = self._get_rewards(ate_food)
 
-        self.render()
 
-        return self._get_observation(), reward, terminated, truncated, self.info
+        return self._get_observation(), reward, terminated, truncated, dict(self.info)
+
+
+
 
     def reset(self, seed=None, options=None):
+        """
+        Reset the environment and return an initial observation.
+        :param seed:
+        :param options:
+        :return:
+        """
         super().reset(seed=seed)
         start_x = self.W // 2
         start_y = self.H // 2
         self.snake = [(start_x, start_y), (start_x - 1, start_y), (start_x - 2, start_y)]
         self.food = self._rand_empty_cell()
-        self.direction = int(self.direction)
+        self.direction = 1
         self._pending_dir = 1
         self.score = 0
         self._just_reset = True
-        self._last_step_ms = 0
         self.info = {}
-        self._prev_food_dist = self._distance_to_food()
         return self._get_observation(), self.info
 
-    def _now_ms(self):
-        # Prefer monotonic clock; fall back to pygame if video init is fine
-        try:
-            if pygame.get_init() and pygame.display.get_init():
-                return int(time.perf_counter_ns() // 1_000_000)
-        except Exception:
-            pass
-        # Monotonic, cross-platform
-        return int(time.perf_counter_ns() // 1_000_000)
 
-    def _throttle_step(self):
-        now = self._now_ms()
-        elapsed = now - self._last_step_ms
 
-        # If timer jumped (negative or way too large), resync to avoid huge sleeps
-        if elapsed < 0 or elapsed > 10 * STEP_EVERY:
-            self._last_step_ms = now - int(STEP_EVERY)
-            elapsed = STEP_EVERY
 
-        wait_ms = int(max(0, STEP_EVERY - elapsed))
-        # Hard cap to avoid Windows freaking out on big sleeps
-        wait_ms = min(wait_ms, 100)  # cap 1s per step, adjust if you need
-
-        if wait_ms > 0:
-            # Use a single path; delay or sleep both fine after clamping
-            if pygame.get_init():
-                pygame.time.delay(wait_ms)  # safer than wait on Windows
-            else:
-                time.sleep(wait_ms / 1000.0)
-
-        self._last_step_ms = self._now_ms()
-
-        self._last_step_ms = self._now_ms()
     def render(self, mode='human'):
-        """Render the game"""
+        """
+        Render in everything using pygame
+        :param mode:
+        :return:
+        """
         # Initialize pygame screen only once
         if not self._pygame_inited:
             pygame.init()
@@ -317,9 +304,89 @@ class Snake(gym.Env):
         hud = font.render(f"Score: {self.score}", True, TEXT)
         self._surface.blit(hud, (10, 8))
 
+
         # Blit to screen and update
         self._screen.blit(self._surface, (0, 0))
         pygame.display.flip()
+
+
+
+
+    def _get_rewards(self, ate_food: bool):
+        """
+        Get rewards based on certain conditions
+        :param ate_food:
+        :return: reward, terminated, truncated
+        """
+        dx, dy = self._DIRS[self.direction]
+        hx, hy = self.snake[0]
+        nx, ny = hx + dx, hy + dy
+
+        ate_food = (self.food is not None) and ((nx, ny) == self.food)
+        reward = 0.0
+        terminated = False
+        truncated = False
+
+
+        # Apple eaten bonus
+        if ate_food:
+            reward += len(self.snake)  # scaled a bit by length
+
+        # Handle walls
+        if self.wrap:
+            nx %= self.W
+            ny %= self.H
+        else:
+            if nx < 0 or nx >= self.W or ny < 0 or ny >= self.H:
+                terminated = True
+        if (nx, ny) in self.snake[1:] and not ate_food:
+            terminated = True
+
+
+        if terminated:
+            reward -= 50
+
+
+        reward -= 0.01
+
+        # use proximity distance to grant greater reward for closer distance
+        # just a helper
+        curr_dist = self._distance_to_food()
+        prox = self._proximity_reward(curr_dist, near=1, far=10, max_r=10.0)
+
+        reward += prox // 10
+
+        return reward, terminated, truncated
+
+
+
+
+    def close(self):
+        """Clean up pygame resources"""
+        if self._pygame_inited:
+            pygame.quit()
+            self._pygame_inited = False
+
+
+
+
+
+
+
+    # utilities/functions
+    def _rand_empty_cell(self):
+        """Generate random empty cell not occupied by snake"""
+        max_attempts = self.W * self.H
+        attempts = 0
+
+        while attempts < max_attempts:
+            p = (np.random.randint(0, self.W), np.random.randint(0, self.H))
+            if p not in self.snake:
+                return p
+            attempts += 1
+
+        # Fallback if no empty cell found (shouldn't happen in normal gameplay)
+        return(0, 0)
 
     def _distance_to_food(self):
         hx, hy = self.snake[0]
@@ -328,32 +395,28 @@ class Snake(gym.Env):
         # Manhattan:
         return abs(fx - hx) + abs(fy - hy)
 
-    def _get_rewards(self, ate_food: bool):
-        reward = 0.0
-        terminated = False
-        truncated = False
+    def _throttle_step(self):
+        now = self._now_ms()
+        elapsed = now - self._last_step_ms
+        if elapsed < 0 or elapsed > 10 * STEP_EVERY:
+            self._last_step_ms = now - int(STEP_EVERY)
+            elapsed = STEP_EVERY
 
-        head_x, head_y = self.snake[0]
+        wait_ms = int(max(0, min(STEP_EVERY - elapsed, 100)))  # cap 100ms
+        if wait_ms > 0:
+            time.sleep(wait_ms / 1000.0)  # één pad, geen pygame delay nodig
 
+        self._last_step_ms = self._now_ms()
 
-        # Distance shaping: reward moving closer, punish moving away
-        curr_dist = self._distance_to_food()
-        if self._prev_food_dist is not None:
-            delta = float(self._prev_food_dist - curr_dist)  # positive if closer
-            reward += 1 * delta
-        self._prev_food_dist = curr_dist
+    # --- vervang _now_ms geheel ---
+    def _now_ms(self):
+        return int(time.perf_counter_ns() // 1_000_000)  # monotonic, cross-platform
 
-        # encourage for staying alive
-        reward += 1
+    def _proximity_reward(self, dist, near=1, far=10, max_r=10.0):
+        # near distance (≤1) gets full reward; far (≥10) gets 0; linear in between
+        if dist <= near:
+            return float(max_r)
+        if dist >= far:
+            return 0.0
+        return float(max_r * (far - dist) / (far - near))  # e.g. 10 * (10 - d) / 9
 
-        # Apple eaten bonus
-        if ate_food:
-            reward += 10.0 + 0.5 * len(self.snake)  # scaled a bit by length
-
-        return reward, terminated, truncated
-
-    def close(self):
-        """Clean up pygame resources"""
-        if self._pygame_inited:
-            pygame.quit()
-            self._pygame_inited = False
